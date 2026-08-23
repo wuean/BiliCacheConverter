@@ -26,7 +26,7 @@ class BiliConverter:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("B站缓存转换工具 v1.0")
+        self.root.title("B站缓存转换工具 v1.0  ·  作者: 乐福学长  ·  https://lefuo.com")
         self.root.geometry("980x680")
         self.root.minsize(820, 520)
 
@@ -288,7 +288,11 @@ class BiliConverter:
 
         # 状态栏
         self.status_var = tk.StringVar(value=f"ffmpeg: {self.ffmpeg_path}")
-        ttk.Label(main, textvariable=self.status_var, foreground='gray').pack(anchor='w', pady=(4, 0))
+        status_frame = ttk.Frame(main)
+        status_frame.pack(fill='x', pady=(4, 0))
+        ttk.Label(status_frame, textvariable=self.status_var, foreground='gray').pack(side='left')
+        ttk.Label(status_frame, text="作者: 乐福学长  |  https://lefuo.com",
+                  foreground='gray').pack(side='right')
 
     def log(self, msg):
         self.log_queue.put(msg)
