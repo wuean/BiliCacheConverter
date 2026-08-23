@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# PyInstaller 构建产物
+build/
+dist/
+*.spec.bak
+
+# ffmpeg.exe 超过 GitHub 100MB 限制,不入库
+# 打包 EXE 时需与脚本同目录
+ffmpeg.exe
+
+# 测试输出
+_test_output/
+*.tmp
