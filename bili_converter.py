@@ -291,8 +291,18 @@ class BiliConverter:
         status_frame = ttk.Frame(main)
         status_frame.pack(fill='x', pady=(4, 0))
         ttk.Label(status_frame, textvariable=self.status_var, foreground='gray').pack(side='left')
-        ttk.Label(status_frame, text="作者: 乐福学长  |  https://lefuo.com",
-                  foreground='gray').pack(side='right')
+
+        # 作者信息(可点击打开链接)
+        author_frame = ttk.Frame(status_frame)
+        author_frame.pack(side='right')
+        ttk.Label(author_frame, text="作者: 乐福学长  |  ",
+                  foreground='gray').pack(side='left')
+        author_link = tk.Label(author_frame, text="https://lefuo.com",
+                               foreground='#0066cc', cursor='hand2')
+        author_link.pack(side='left')
+        author_link.bind('<Button-1>', lambda e: self.open_url('https://lefuo.com'))
+        author_link.bind('<Enter>', lambda e: author_link.config(foreground='#cc0000'))
+        author_link.bind('<Leave>', lambda e: author_link.config(foreground='#0066cc'))
 
     def log(self, msg):
         self.log_queue.put(msg)
@@ -311,6 +321,13 @@ class BiliConverter:
         self.root.after(100, self.poll_log)
 
     # ---------- 事件 ----------
+    def open_url(self, url):
+        """用默认浏览器打开 URL"""
+        try:
+            os.startfile(url)
+        except Exception as e:
+            self.log(f"打开链接失败: {e}")
+
     def browse_cache(self):
         d = filedialog.askdirectory(title="选择 B 站缓存目录")
         if d:
