@@ -328,6 +328,27 @@ class BiliConverter:
         except Exception as e:
             self.log(f"打开链接失败: {e}")
 
+    def make_input_uri(self, path):
+        """根据 m4s 文件头部决定 ffmpeg 输入 URI。
+
+        B 站新版客户端(2024+)在 m4s 开头加了 9 个 ASCII '0'(0x30)字节
+        作为防直放标记,ffmpeg 无法直接识别(报 Invalid data)。
+        用 ffmpeg 的 subfile 协议按字节偏移读取,无需复制大文件。
+
+        若文件无该头部(老格式或其他来源),原样返回路径。
+        """
+        M4S_HEADER = b'\x30' * 9  # 9 个 ASCII '0'
+        try:
+            with open(path, 'rb') as f:
+                if f.read(9) == M4S_HEADER:
+                    # subfile 协议格式: subfile,,start,OFFSET,,:PATH
+                    # Windows 路径用 / 替换 \ 避免转义问题
+                    norm = path.replace('\\', '/')
+                    return f"subfile,,start,9,,:{norm}"
+        except Exception as e:
+            self.log(f"检测 m4s 头部失败({path}): {e}")
+        return path
+
     def browse_cache(self):
         d = filedialog.askdirectory(title="选择 B 站缓存目录")
         if d:
@@ -407,10 +428,16 @@ class BiliConverter:
                 self.update_progress(i + 1, total)
                 continue
 
+            # 检测并构建 ffmpeg 输入 URI
+            # B 站新版客户端在 m4s 开头加 9 个 '0' 字节作为防直放标记,
+            # ffmpeg 无法直接识别,用 subfile 协议按字节偏移读取(无需复制文件)
+            v_uri = self.make_input_uri(video['video'])
+            a_uri = self.make_input_uri(video['audio'])
+
             cmd = [
                 self.ffmpeg_path, '-y',
-                '-i', video['video'],
-                '-i', video['audio'],
+                '-i', v_uri,
+                '-i', a_uri,
                 '-c', 'copy',
                 output_path,
             ]
