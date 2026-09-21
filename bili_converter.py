@@ -26,7 +26,7 @@ class BiliConverter:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("B站缓存转换工具 v1.0  ·  作者: 乐福学长  ·  https://lefuo.com")
+        self.root.title("B站缓存转换工具 v1.2  ·  作者: 乐福学长  ·  https://lefuo.com")
         self.root.geometry("980x680")
         self.root.minsize(820, 520)
 
@@ -38,8 +38,148 @@ class BiliConverter:
 
         self.ffmpeg_path = self.find_ffmpeg()
 
+        self.setup_style()
         self.build_ui()
         self.poll_log()
+
+    # ---------- 样式 ----------
+    def hex_to_rgb(self, h):
+        h = h.lstrip('#')
+        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+    def draw_gradient(self, canvas, color1, color2):
+        """在 Canvas 上绘制垂直渐变背景"""
+        canvas.update_idletasks()
+        w = canvas.winfo_width()
+        h = canvas.winfo_height()
+        if w < 2 or h < 2:
+            return
+        r1, g1, b1 = self.hex_to_rgb(color1)
+        r2, g2, b2 = self.hex_to_rgb(color2)
+        for i in range(h):
+            ratio = i / h
+            r = int(r1 + (r2 - r1) * ratio)
+            g = int(g1 + (g2 - g1) * ratio)
+            b = int(b1 + (b2 - b1) * ratio)
+            canvas.create_line(0, i, w, i, fill=f'#{r:02x}{g:02x}{b:02x}')
+
+    def make_card(self, parent, title=None, padding=14, header_right=None):
+        """创建带阴影的卡片容器,返回 (外框, 内容Frame)
+
+        header_right: 可选,传入一个函数 build(parent) -> widget,
+                      该函数会在标题栏 Frame 内创建并返回右侧控件
+        """
+        # 阴影层(深灰)
+        shadow = tk.Frame(parent, bg='#d4d4d8')
+        # 卡片白底层
+        card = tk.Frame(shadow, bg='#ffffff')
+        card.pack(fill='both', expand=True, padx=(0, 1), pady=(0, 1))
+        if title:
+            header = tk.Frame(card, bg='#ffffff')
+            header.pack(fill='x', padx=padding, pady=(padding, 6))
+            tk.Label(header, text=title, bg='#ffffff', fg='#18181b',
+                     font=('Microsoft YaHei UI', 10, 'bold')).pack(side='left')
+            if header_right is not None:
+                right_widget = header_right(header)
+                if right_widget is not None:
+                    right_widget.pack(side='right')
+            # 标题下的装饰线
+            line = tk.Frame(card, bg='#2563eb', height=2)
+            line.pack(fill='x', padx=padding)
+            inner = tk.Frame(card, bg='#ffffff')
+            inner.pack(fill='both', expand=True, padx=padding, pady=(8, padding))
+        else:
+            inner = tk.Frame(card, bg='#ffffff')
+            inner.pack(fill='both', expand=True, padx=padding, pady=padding)
+        return shadow, inner
+
+    def setup_style(self):
+        """配置 ttk 主题与全局配色"""
+        style = ttk.Style()
+        try:
+            style.theme_use('clam')
+        except tk.TclError:
+            pass
+
+        # 配色方案 - 蓝色系主题
+        BG = '#f4f4f5'            # 主背景(浅灰)
+        FG = '#18181b'            # 主文字
+        MUTED = '#a1a1aa'         # 次要文字
+        ACCENT = '#2563eb'        # 主色(蓝)
+        ACCENT_HOVER = '#3b82f6'
+        ACCENT_PRESS = '#1d4ed8'
+        ACCENT_SOFT = '#eff6ff'   # 蓝色浅底
+        BORDER = '#e5e7eb'
+        ENTRY_BG = '#ffffff'
+
+        style.configure('.', background=BG, foreground=FG,
+                        font=('Microsoft YaHei UI', 9))
+
+        # Frame / Label
+        style.configure('TFrame', background=BG)
+        style.configure('TLabel', background=BG, foreground=FG)
+        style.configure('Muted.TLabel', background=BG, foreground=MUTED)
+        style.configure('Card.TLabel', background='#ffffff', foreground=FG)
+        style.configure('CardMuted.TLabel', background='#ffffff', foreground=MUTED)
+
+        # Entry(细边框,1px)
+        style.configure('TEntry', fieldbackground=ENTRY_BG, foreground=FG,
+                        bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER,
+                        borderwidth=1, padding=6)
+        style.map('TEntry', bordercolor=[('focus', ACCENT)],
+                  lightcolor=[('focus', ACCENT)], darkcolor=[('focus', ACCENT)])
+
+        # 主按钮(蓝色实心)
+        style.configure('Accent.TButton', background=ACCENT, foreground='#ffffff',
+                        borderwidth=0, focusthickness=0, padding=(18, 8),
+                        font=('Microsoft YaHei UI', 9, 'bold'))
+        style.map('Accent.TButton',
+                  background=[('active', ACCENT_HOVER), ('pressed', ACCENT_PRESS),
+                              ('disabled', '#d4d4d8')],
+                  foreground=[('disabled', '#ffffff')])
+
+        # 次按钮(白底蓝边)
+        style.configure('Secondary.TButton', background=ENTRY_BG, foreground=FG,
+                        borderwidth=1, bordercolor=BORDER, focusthickness=0,
+                        padding=(14, 7), font=('Microsoft YaHei UI', 9))
+        style.map('Secondary.TButton',
+                  background=[('active', ACCENT_SOFT)],
+                  bordercolor=[('active', ACCENT)],
+                  foreground=[('active', ACCENT_PRESS)])
+
+        # Treeview
+        style.configure('Treeview', background=ENTRY_BG, fieldbackground=ENTRY_BG,
+                        foreground=FG, bordercolor=BORDER, rowheight=32,
+                        font=('Microsoft YaHei UI', 9))
+        style.configure('Treeview.Heading', background='#fafafa', foreground=FG,
+                        bordercolor=BORDER, font=('Microsoft YaHei UI', 9, 'bold'),
+                        padding=(8, 6))
+        style.map('Treeview',
+                  background=[('selected', ACCENT_SOFT)],
+                  foreground=[('selected', ACCENT_PRESS)])
+        style.map('Treeview.Heading',
+                  background=[('active', '#f4f4f5')])
+
+        # Progressbar
+        style.configure('Horizontal.TProgressbar', background=ACCENT,
+                        troughcolor='#f4f4f5', bordercolor=BORDER,
+                        lightcolor=ACCENT, darkcolor=ACCENT, thickness=22)
+
+        # Scrollbar
+        style.configure('Vertical.TScrollbar', background='#d4d4d8',
+                        troughcolor=BG, bordercolor=BG, arrowcolor=FG,
+                        arrowsize=14)
+        style.map('Vertical.TScrollbar',
+                  background=[('active', '#a1a1aa')])
+        style.configure('Horizontal.TScrollbar', background='#d4d4d8',
+                        troughcolor=BG, bordercolor=BG, arrowcolor=FG,
+                        arrowsize=14)
+        style.map('Horizontal.TScrollbar',
+                  background=[('active', '#a1a1aa')])
+
+        # 根窗口背景
+        self.root.configure(bg=BG)
+
 
     # ---------- 工具方法 ----------
     def find_ffmpeg(self):
@@ -79,8 +219,8 @@ class BiliConverter:
         if video_temp.exists() and audio_temp.exists():
             return str(video_temp), str(audio_temp)
 
-        # 遍历 m4s
-        m4s_files = sorted(video_dir.glob('*.m4s'), key=lambda f: -f.stat().st_size)
+        # 遍历 m4s(递归搜索,适配手机APP的 <qn>/ 子目录结构)
+        m4s_files = sorted(video_dir.rglob('*.m4s'), key=lambda f: -f.stat().st_size)
         for m4s in m4s_files:
             name = m4s.name
             name_lower = name.lower()
@@ -124,6 +264,7 @@ class BiliConverter:
         self.videos = []
         self.progress_var.set(0)
         self.progress_label.config(text="0/0")
+        self.header_stat.config(text="扫描中...")
 
         self.log(f"开始扫描: {cache_dir}")
         root = Path(cache_dir)
@@ -166,7 +307,7 @@ class BiliConverter:
                          or page_data.get('part')
                          or data.get('title', ''))
                 cid = page_data.get('cid', '')
-                uname = data.get('up_name', '')
+                uname = data.get('owner_name') or data.get('up_name', '')
                 video_dir = entry_file.parent
                 seen_dirs.add(video_dir.resolve())
 
@@ -203,6 +344,7 @@ class BiliConverter:
                     found += 1
 
         self.log(f"扫描完成,共找到 {found} 个视频")
+        self.header_stat.config(text=f"共 {found} 个视频" if found else "未找到视频")
 
     def add_video(self, video):
         idx = len(self.videos)
@@ -214,30 +356,85 @@ class BiliConverter:
 
     # ---------- UI ----------
     def build_ui(self):
-        main = ttk.Frame(self.root, padding=8)
+        main = tk.Frame(self.root, bg='#f4f4f5')
         main.pack(fill='both', expand=True)
 
-        # 顶部: 目录配置
-        top = ttk.LabelFrame(main, text="目录配置", padding=8)
-        top.pack(fill='x', pady=(0, 8))
+        # ===== 渐变标题栏(蓝色) =====
+        header_canvas = tk.Canvas(main, height=76, highlightthickness=0, bg='#2563eb')
+        header_canvas.pack(fill='x')
+        header_canvas.bind('<Configure>',
+                           lambda e: self.draw_gradient(header_canvas, '#3b82f6', '#1d4ed8'))
 
-        ttk.Label(top, text="缓存目录:").grid(row=0, column=0, sticky='w', padx=(0,4))
-        ttk.Entry(top, textvariable=self.cache_dir, width=70).grid(row=0, column=1, sticky='we', padx=4)
-        ttk.Button(top, text="浏览...", command=self.browse_cache).grid(row=0, column=2, padx=4)
-        ttk.Button(top, text="扫描", command=self.scan_cache).grid(row=0, column=3, padx=4)
+        # 标题栏内容(叠加在 Canvas 上)
+        header_inner = tk.Frame(header_canvas, bg='#2563eb')
+        header_canvas.create_window(0, 0, anchor='nw', window=header_inner,
+                                    tags='header_inner')
+        header_canvas.bind('<Configure>',
+                           lambda e: header_canvas.itemconfig('header_inner',
+                                                              width=e.width, height=e.height))
 
-        ttk.Label(top, text="输出目录:").grid(row=1, column=0, sticky='w', padx=(0,4), pady=(4,0))
-        ttk.Entry(top, textvariable=self.output_dir, width=70).grid(row=1, column=1, sticky='we', padx=4, pady=(4,0))
-        ttk.Button(top, text="浏览...", command=self.browse_output).grid(row=1, column=2, padx=4, pady=(4,0))
-        ttk.Label(top, text="(留空输出到缓存目录)", foreground='gray').grid(row=1, column=3, padx=4, pady=(4,0), sticky='w')
-        top.columnconfigure(1, weight=1)
+        title_frame = tk.Frame(header_inner, bg='#2563eb')
+        title_frame.pack(side='left', padx=20, pady=14)
+        tk.Label(title_frame, text="🎬  B站缓存转换工具", bg='#2563eb', fg='#ffffff',
+                 font=('Microsoft YaHei UI', 16, 'bold')).pack(anchor='w')
+        tk.Label(title_frame, text="将 m4s 缓存合并为 mp4  ·  纯本地操作  ·  v1.2",
+                 bg='#2563eb', fg='#dbeafe',
+                 font=('Microsoft YaHei UI', 9)).pack(anchor='w', pady=(2, 0))
 
-        # 中间: 视频列表
-        mid = ttk.LabelFrame(main, text="视频列表 (双击行打开所在目录)", padding=4)
-        mid.pack(fill='both', expand=True, pady=(0, 8))
+        # 标题栏右侧状态
+        right_frame = tk.Frame(header_inner, bg='#2563eb')
+        right_frame.pack(side='right', padx=20, pady=14)
+        self.header_stat = tk.Label(right_frame, text="就绪", bg='#2563eb', fg='#ffffff',
+                                    font=('Microsoft YaHei UI', 10, 'bold'))
+        self.header_stat.pack(anchor='e')
+
+        # 主体内容区
+        body = tk.Frame(main, bg='#f4f4f5', padx=12, pady=12)
+        body.pack(fill='both', expand=True)
+
+        # ===== 卡片1: 目录配置(grid 布局,确保两行对齐) =====
+        dir_card, dir_inner = self.make_card(body, title="📁  目录配置")
+        dir_card.pack(fill='x', pady=(0, 10))
+
+        dir_inner.columnconfigure(1, weight=1)
+        # 缓存目录行
+        tk.Label(dir_inner, text="缓存目录", bg='#ffffff', fg='#52525b',
+                 font=('Microsoft YaHei UI', 9)).grid(row=0, column=0, sticky='w', padx=(0, 8))
+        ttk.Entry(dir_inner, textvariable=self.cache_dir).grid(row=0, column=1, sticky='we', padx=(0, 8))
+        ttk.Button(dir_inner, text="浏览...", command=self.browse_cache,
+                   style='Secondary.TButton').grid(row=0, column=2, padx=(0, 6))
+        ttk.Button(dir_inner, text="🔍 扫描", command=self.scan_cache,
+                   style='Accent.TButton').grid(row=0, column=3)
+        # 输出目录行
+        tk.Label(dir_inner, text="输出目录", bg='#ffffff', fg='#52525b',
+                 font=('Microsoft YaHei UI', 9)).grid(row=1, column=0, sticky='w', padx=(0, 8), pady=(10, 0))
+        ttk.Entry(dir_inner, textvariable=self.output_dir).grid(row=1, column=1, sticky='we', padx=(0, 8), pady=(10, 0))
+        ttk.Button(dir_inner, text="浏览...", command=self.browse_output,
+                   style='Secondary.TButton').grid(row=1, column=2, padx=(0, 6), pady=(10, 0))
+        tk.Label(dir_inner, text="留空则输出到缓存目录", bg='#ffffff', fg='#a1a1aa',
+                 font=('Microsoft YaHei UI', 8)).grid(row=1, column=3, sticky='w', pady=(10, 0))
+
+        # ===== 卡片2: 视频列表(转换按钮放在标题栏右侧,确保始终可见) =====
+        def build_list_buttons(header):
+            """在标题栏右侧创建操作按钮组"""
+            btns = tk.Frame(header, bg='#ffffff')
+            ttk.Button(btns, text="☑ 全选", command=self.select_all,
+                       style='Secondary.TButton').pack(side='left', padx=(0, 6))
+            ttk.Button(btns, text="☐ 清空", command=self.clear_selection,
+                       style='Secondary.TButton').pack(side='left', padx=(0, 12))
+            ttk.Button(btns, text="⚡ 转换选中", command=self.convert_selected,
+                       style='Accent.TButton').pack(side='left', padx=(0, 6))
+            ttk.Button(btns, text="🚀 全部转换", command=self.convert_all,
+                       style='Accent.TButton').pack(side='left')
+            return btns
+
+        list_card, list_inner = self.make_card(body, title="📋  视频列表  (双击行打开所在目录)",
+                                               header_right=build_list_buttons)
+        list_card.pack(fill='both', expand=True, pady=(0, 10))
 
         cols = ('title', 'uname', 'size', 'status')
-        self.tree = ttk.Treeview(mid, columns=cols, show='headings', selectmode='extended')
+        self.tree = ttk.Treeview(list_inner, columns=cols, show='headings',
+                                 selectmode='extended')
         self.tree.heading('title', text='标题')
         self.tree.heading('uname', text='UP主')
         self.tree.heading('size', text='大小(MB)')
@@ -247,62 +444,61 @@ class BiliConverter:
         self.tree.column('size', width=80, anchor='e')
         self.tree.column('status', width=100, anchor='center')
 
-        self.tree.tag_configure('pending', foreground='#666666')
-        self.tree.tag_configure('converting', foreground='#0066cc')
-        self.tree.tag_configure('done', foreground='#008800')
-        self.tree.tag_configure('error', foreground='#cc0000')
+        self.tree.tag_configure('pending', foreground='#71717a', background='#ffffff')
+        self.tree.tag_configure('converting', foreground='#1d4ed8', background='#eff6ff')
+        self.tree.tag_configure('done', foreground='#16a34a', background='#f0fdf4')
+        self.tree.tag_configure('error', foreground='#dc2626', background='#fef2f2')
 
-        vsb = ttk.Scrollbar(mid, orient='vertical', command=self.tree.yview)
+        vsb = ttk.Scrollbar(list_inner, orient='vertical', command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
         self.tree.pack(side='left', fill='both', expand=True)
         vsb.pack(side='right', fill='y')
-
         self.tree.bind('<Double-1>', lambda e: self.open_in_explorer())
 
-        # 底部: 操作 + 进度
-        bottom = ttk.Frame(main)
-        bottom.pack(fill='x')
-
-        btns = ttk.Frame(bottom)
-        btns.pack(side='left')
-        ttk.Button(btns, text="全选", command=self.select_all).pack(side='left', padx=2)
-        ttk.Button(btns, text="清空选择", command=self.clear_selection).pack(side='left', padx=2)
-        ttk.Button(btns, text="转换选中", command=self.convert_selected).pack(side='left', padx=8)
-        ttk.Button(btns, text="全部转换", command=self.convert_all).pack(side='left', padx=2)
-
+        # ===== 进度条(单独一行,在日志上方) =====
+        prog_bar = tk.Frame(body, bg='#f4f4f5')
+        prog_bar.pack(fill='x', pady=(0, 10))
+        tk.Label(prog_bar, text="进度", bg='#f4f4f5', fg='#52525b',
+                 font=('Microsoft YaHei UI', 9)).pack(side='left', padx=(0, 8))
         self.progress_var = tk.DoubleVar()
-        self.progress = ttk.Progressbar(bottom, variable=self.progress_var, maximum=100)
-        self.progress.pack(side='left', fill='x', expand=True, padx=12)
-        self.progress_label = ttk.Label(bottom, text="0/0", width=10)
-        self.progress_label.pack(side='left')
+        self.progress = ttk.Progressbar(prog_bar, variable=self.progress_var, maximum=100)
+        self.progress.pack(side='left', fill='x', expand=True)
+        self.progress_label = tk.Label(prog_bar, text="0/0", bg='#f4f4f5', fg='#52525b',
+                                       font=('Microsoft YaHei UI', 9, 'bold'), width=8)
+        self.progress_label.pack(side='left', padx=(10, 0))
 
-        # 日志区
-        log_frame = ttk.LabelFrame(main, text="日志", padding=4)
-        log_frame.pack(fill='x', pady=(8, 0))
-        self.log_text = tk.Text(log_frame, height=7, wrap='word', state='disabled',
-                                font=('Consolas', 9))
-        log_vsb = ttk.Scrollbar(log_frame, orient='vertical', command=self.log_text.yview)
+        # ===== 卡片3: 日志 =====
+        log_card, log_inner = self.make_card(body, title="📟  运行日志")
+        log_card.pack(fill='x')
+
+        self.log_text = tk.Text(log_inner, height=7, wrap='word', state='disabled',
+                                font=('Consolas', 9), bg='#1e1e2e', fg='#cdd6f4',
+                                insertbackground='#cdd6f4', selectbackground='#45475a',
+                                relief='flat', borderwidth=0, padx=8, pady=6)
+        log_vsb = ttk.Scrollbar(log_inner, orient='vertical', command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=log_vsb.set)
         self.log_text.pack(side='left', fill='both', expand=True)
         log_vsb.pack(side='right', fill='y')
 
-        # 状态栏
+        # ===== 底部状态栏 =====
+        status_frame = tk.Frame(body, bg='#f4f4f5')
+        status_frame.pack(fill='x', pady=(8, 0))
         self.status_var = tk.StringVar(value=f"ffmpeg: {self.ffmpeg_path}")
-        status_frame = ttk.Frame(main)
-        status_frame.pack(fill='x', pady=(4, 0))
-        ttk.Label(status_frame, textvariable=self.status_var, foreground='gray').pack(side='left')
+        tk.Label(status_frame, textvariable=self.status_var, bg='#f4f4f5', fg='#a1a1aa',
+                 font=('Microsoft YaHei UI', 8)).pack(side='left')
 
-        # 作者信息(可点击打开链接)
-        author_frame = ttk.Frame(status_frame)
+        author_frame = tk.Frame(status_frame, bg='#f4f4f5')
         author_frame.pack(side='right')
-        ttk.Label(author_frame, text="作者: 乐福学长  |  ",
-                  foreground='gray').pack(side='left')
+        tk.Label(author_frame, text="作者: 乐福学长  |  ", bg='#f4f4f5', fg='#a1a1aa',
+                 font=('Microsoft YaHei UI', 8)).pack(side='left')
         author_link = tk.Label(author_frame, text="https://lefuo.com",
-                               foreground='#0066cc', cursor='hand2')
+                               foreground='#2563eb', cursor='hand2', bg='#f4f4f5',
+                               font=('Microsoft YaHei UI', 8, 'underline'))
         author_link.pack(side='left')
         author_link.bind('<Button-1>', lambda e: self.open_url('https://lefuo.com'))
-        author_link.bind('<Enter>', lambda e: author_link.config(foreground='#cc0000'))
-        author_link.bind('<Leave>', lambda e: author_link.config(foreground='#0066cc'))
+        author_link.bind('<Enter>', lambda e: author_link.config(foreground='#3b82f6'))
+        author_link.bind('<Leave>', lambda e: author_link.config(foreground='#2563eb'))
+
 
     def log(self, msg):
         self.log_queue.put(msg)
@@ -412,6 +608,7 @@ class BiliConverter:
 
     def convert_worker(self, idxs):
         total = len(idxs)
+        self.root.after(0, lambda: self.header_stat.config(text="转换中..."))
         for i, idx in enumerate(idxs):
             video = self.videos[idx]
             self.update_status(idx, 'converting')
@@ -462,6 +659,7 @@ class BiliConverter:
             self.update_progress(i + 1, total)
 
         self.log(f"全部结束,共处理 {total} 个")
+        self.root.after(0, lambda: self.header_stat.config(text="就绪"))
         self.converting = False
 
     def update_status(self, idx, status):
