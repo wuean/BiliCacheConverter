@@ -26,7 +26,7 @@ class BiliConverter:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("B站缓存转换工具 v1.2  ·  作者: 乐福学长  ·  https://lefuo.com")
+        self.root.title("B站缓存转换工具 v1.3  ·  作者: 乐福学长  ·  https://lefuo.com")
         self.root.geometry("980x680")
         self.root.minsize(820, 520)
 
@@ -35,6 +35,8 @@ class BiliConverter:
         self.videos = []
         self.converting = False
         self.log_queue = queue.Queue()
+        # 标题栏渐变上次绘制的高度,避免重复绘制
+        self._grad_h = None
 
         self.ffmpeg_path = self.find_ffmpeg()
 
@@ -47,13 +49,15 @@ class BiliConverter:
         h = h.lstrip('#')
         return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
-    def draw_gradient(self, canvas, color1, color2):
-        """在 Canvas 上绘制垂直渐变背景"""
-        canvas.update_idletasks()
-        w = canvas.winfo_width()
-        h = canvas.winfo_height()
+    def draw_gradient(self, canvas, color1, color2, w, h):
+        """在 Canvas 上绘制垂直渐变背景
+
+        每次重绘前先删掉上一批渐变线,否则窗口每缩放一次就会
+        累积 h 条线段,长时间拖动会吃掉大量内存。
+        """
         if w < 2 or h < 2:
             return
+        canvas.delete('grad')
         r1, g1, b1 = self.hex_to_rgb(color1)
         r2, g2, b2 = self.hex_to_rgb(color2)
         for i in range(h):
@@ -61,7 +65,18 @@ class BiliConverter:
             r = int(r1 + (r2 - r1) * ratio)
             g = int(g1 + (g2 - g1) * ratio)
             b = int(b1 + (b2 - b1) * ratio)
-            canvas.create_line(0, i, w, i, fill=f'#{r:02x}{g:02x}{b:02x}')
+            canvas.create_line(0, i, w, i, fill=f'#{r:02x}{g:02x}{b:02x}',
+                               tags='grad')
+
+    def on_header_resize(self, event, canvas):
+        """标题栏尺寸变化:重绘渐变,并保证内容窗口压在渐变之上"""
+        if self._grad_h != event.height:
+            self.draw_gradient(canvas, '#3b82f6', '#1d4ed8',
+                               event.width, event.height)
+            self._grad_h = event.height
+        canvas.itemconfig('header_inner', width=event.width, height=event.height)
+        # 渐变线创建于内容窗口之后,必须重新置顶,否则会盖住标题文字
+        canvas.tag_raise('header_inner')
 
     def make_card(self, parent, title=None, padding=14, header_right=None):
         """创建带阴影的卡片容器,返回 (外框, 内容Frame)
@@ -362,22 +377,21 @@ class BiliConverter:
         # ===== 渐变标题栏(蓝色) =====
         header_canvas = tk.Canvas(main, height=76, highlightthickness=0, bg='#2563eb')
         header_canvas.pack(fill='x')
-        header_canvas.bind('<Configure>',
-                           lambda e: self.draw_gradient(header_canvas, '#3b82f6', '#1d4ed8'))
 
         # 标题栏内容(叠加在 Canvas 上)
         header_inner = tk.Frame(header_canvas, bg='#2563eb')
         header_canvas.create_window(0, 0, anchor='nw', window=header_inner,
                                     tags='header_inner')
+        # 只绑定一次:重复 bind 同一事件会覆盖前一个处理函数,
+        # 导致渐变永远画不出来(旧版 v1.2 的渐变就是这样失效的)。
         header_canvas.bind('<Configure>',
-                           lambda e: header_canvas.itemconfig('header_inner',
-                                                              width=e.width, height=e.height))
+                           lambda e: self.on_header_resize(e, header_canvas))
 
         title_frame = tk.Frame(header_inner, bg='#2563eb')
         title_frame.pack(side='left', padx=20, pady=14)
         tk.Label(title_frame, text="🎬  B站缓存转换工具", bg='#2563eb', fg='#ffffff',
                  font=('Microsoft YaHei UI', 16, 'bold')).pack(anchor='w')
-        tk.Label(title_frame, text="将 m4s 缓存合并为 mp4  ·  纯本地操作  ·  v1.2",
+        tk.Label(title_frame, text="将 m4s 缓存合并为 mp4  ·  纯本地操作  ·  v1.3",
                  bg='#2563eb', fg='#dbeafe',
                  font=('Microsoft YaHei UI', 9)).pack(anchor='w', pady=(2, 0))
 
@@ -430,7 +444,9 @@ class BiliConverter:
 
         list_card, list_inner = self.make_card(body, title="📋  视频列表  (双击行打开所在目录)",
                                                header_right=build_list_buttons)
-        list_card.pack(fill='both', expand=True, pady=(0, 10))
+        # 注意:这里不立即 pack,留到最后再打包。
+        # 它带 expand=True,若先打包会把后面按顺序打包的进度条/日志/状态栏
+        # 挤出可视区(v1.2 的日志面板就是这样看不见的)。
 
         cols = ('title', 'uname', 'size', 'status')
         self.tree = ttk.Treeview(list_inner, columns=cols, show='headings',
@@ -457,7 +473,6 @@ class BiliConverter:
 
         # ===== 进度条(单独一行,在日志上方) =====
         prog_bar = tk.Frame(body, bg='#f4f4f5')
-        prog_bar.pack(fill='x', pady=(0, 10))
         tk.Label(prog_bar, text="进度", bg='#f4f4f5', fg='#52525b',
                  font=('Microsoft YaHei UI', 9)).pack(side='left', padx=(0, 8))
         self.progress_var = tk.DoubleVar()
@@ -469,7 +484,7 @@ class BiliConverter:
 
         # ===== 卡片3: 日志 =====
         log_card, log_inner = self.make_card(body, title="📟  运行日志")
-        log_card.pack(fill='x')
+        # 日志卡片的 pack 统一放到 build_ui 末尾(见"组装布局")
 
         self.log_text = tk.Text(log_inner, height=7, wrap='word', state='disabled',
                                 font=('Consolas', 9), bg='#1e1e2e', fg='#cdd6f4',
@@ -482,7 +497,6 @@ class BiliConverter:
 
         # ===== 底部状态栏 =====
         status_frame = tk.Frame(body, bg='#f4f4f5')
-        status_frame.pack(fill='x', pady=(8, 0))
         self.status_var = tk.StringVar(value=f"ffmpeg: {self.ffmpeg_path}")
         tk.Label(status_frame, textvariable=self.status_var, bg='#f4f4f5', fg='#a1a1aa',
                  font=('Microsoft YaHei UI', 8)).pack(side='left')
@@ -498,6 +512,17 @@ class BiliConverter:
         author_link.bind('<Button-1>', lambda e: self.open_url('https://lefuo.com'))
         author_link.bind('<Enter>', lambda e: author_link.config(foreground='#3b82f6'))
         author_link.bind('<Leave>', lambda e: author_link.config(foreground='#2563eb'))
+
+        # ===== 组装布局 =====
+        # 底部这一组用 side='bottom' 打包,并且必须先打包的贴在窗口最下方,
+        # 因此顺序为 状态栏 -> 日志 -> 进度条,最终自上而下得到
+        # 进度条 / 日志 / 状态栏。它们在列表卡片之前打包,空间先被满足,
+        # 不会被列表的 expand=True 挤出可视区。
+        status_frame.pack(side='bottom', fill='x')
+        log_card.pack(side='bottom', fill='x', pady=(0, 8))
+        prog_bar.pack(side='bottom', fill='x', pady=(0, 10))
+        # 列表卡片最后打包:作为唯一的可伸缩区域,只吸收剩余空间
+        list_card.pack(side='top', fill='both', expand=True)
 
 
     def log(self, msg):
