@@ -26,7 +26,7 @@ class BiliConverter:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("B站缓存转换工具 v1.3  ·  作者: 乐福学长  ·  https://lefuo.com")
+        self.root.title("B站缓存转换工具 v1.4  ·  作者: 乐福学长  ·  https://lefuo.com")
         self.root.geometry("980x680")
         self.root.minsize(820, 520)
 
@@ -251,9 +251,10 @@ class BiliConverter:
                 continue
 
             # 模式2: PC 客户端命名 cid-1-XXXXX.m4s
+            #   新版(2026+)会在 cid 后插入 _t<分P> 后缀, 如 43604772502_t18-1-30064.m4s
             #   视频: 30064, 30080, 30077, 30121, 30125 ... (>=30200 之外)
             #   音频: 30280, 30232, 30216 ... (>=30200)
-            match = re.match(r'^(\d+)-1-(\d+)\.m4s$', name)
+            match = re.match(r'^(\d+)(?:_t\d+)?-1-(\d+)\.m4s$', name)
             if match:
                 file_cid, code = match.group(1), int(match.group(2))
                 if str(cid) and file_cid != str(cid):
@@ -342,7 +343,7 @@ class BiliConverter:
             self.log("未找到 videoInfo.json/entry.json, 尝试扫描裸 m4s...")
             groups = {}
             for m4s in root.rglob('*.m4s'):
-                m = re.match(r'^(\d+)-1-\d+.*\.m4s$', m4s.name)
+                m = re.match(r'^(\d+)(?:_t\d+)?-1-\d+.*\.m4s$', m4s.name)
                 if m:
                     groups.setdefault(m.group(1), []).append(m4s.parent)
             for cid, dirs in groups.items():
@@ -391,7 +392,7 @@ class BiliConverter:
         title_frame.pack(side='left', padx=20, pady=14)
         tk.Label(title_frame, text="🎬  B站缓存转换工具", bg='#2563eb', fg='#ffffff',
                  font=('Microsoft YaHei UI', 16, 'bold')).pack(anchor='w')
-        tk.Label(title_frame, text="将 m4s 缓存合并为 mp4  ·  纯本地操作  ·  v1.3",
+        tk.Label(title_frame, text="将 m4s 缓存合并为 mp4  ·  纯本地操作  ·  v1.4",
                  bg='#2563eb', fg='#dbeafe',
                  font=('Microsoft YaHei UI', 9)).pack(anchor='w', pady=(2, 0))
 
