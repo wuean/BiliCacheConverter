@@ -1,5 +1,7 @@
 # B站缓存转换工具
 
+[![下载 EXE v1.4](https://img.shields.io/badge/Download-EXE%20v1.4-2563eb?style=for-the-badge&logo=github&logoColor=white)](https://github.com/wuean/BiliCacheConverter/releases/latest)
+
 将 B 站客户端下载的 m4s 音视频缓存合并为可播放的 mp4 文件。
 
 纯本地操作，不联网、不调用 B 站 API、无需登录，永久可用。
